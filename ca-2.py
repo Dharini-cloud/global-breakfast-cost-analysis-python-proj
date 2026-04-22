@@ -1,0 +1,137 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from scipy.stats import zscore
+
+# -------------------------------
+# 1. LOAD DATA
+# -------------------------------
+df = pd.read_csv("breakfast basket.csv")
+
+# -------------------------------
+# 2. DATA CLEANING
+# -------------------------------
+
+# Clean column names
+df.columns = df.columns.str.strip().str.lower().str.replace(" ", "_")
+
+# Drop fully empty rows
+df = df.dropna(how='all')
+
+# Separate columns
+num_cols = df.select_dtypes(include=np.number).columns
+cat_cols = df.select_dtypes(include='object').columns
+
+# Handle missing values
+for col in num_cols:
+    df[col] = df[col].fillna(df[col].median())
+
+for col in cat_cols:
+    df[col] = df[col].fillna(df[col].mode()[0])
+
+# Remove duplicates
+df = df.drop_duplicates().reset_index(drop=True)
+
+# Remove constant columns (important)
+nunique = df[num_cols].nunique()
+constant_cols = nunique[nunique <= 1].index
+df = df.drop(columns=constant_cols)
+
+# Update numeric columns
+num_cols = df.select_dtypes(include=np.number).columns
+
+# -------------------------------
+# 3. EDA
+# -------------------------------
+print("\nData Info:\n")
+print(df.info())
+
+print("\nSummary Statistics:\n")
+print(df.describe())
+
+print("\nSkewness:\n")
+print(df.skew(numeric_only=True))
+
+# -------------------------------
+# 4. VISUALIZATION (IMPROVED)
+# -------------------------------
+sns.set(style="whitegrid")
+
+# 1. Histogram
+plt.figure(figsize=(6,4))
+sns.histplot(df['breakfast_basket_usd'], kde=True)
+plt.title("Distribution of Breakfast Basket Cost")
+plt.show()
+
+# 2. Boxplot
+plt.figure(figsize=(6,4))
+sns.boxplot(x=df['breakfast_basket_usd'])
+plt.title("Outlier Detection (Basket Cost)")
+plt.show()
+
+# 3. Top Items by Cost
+top_items = df.groupby('item')['breakfast_basket_usd'].mean().sort_values(ascending=False).head(10)
+
+plt.figure(figsize=(10,5))
+top_items.plot(kind='bar')
+plt.title("Top 10 Items by Average Basket Cost")
+plt.xticks(rotation=45)
+plt.tight_layout()
+plt.show()
+
+# 4. Scatter Plot
+plt.figure(figsize=(6,4))
+sns.scatterplot(x='price_usd', y='breakfast_basket_usd', data=df)
+plt.title("Price vs Basket Cost")
+plt.show()
+
+# 5. Correlation Heatmap (clean)
+important_cols = [
+    'price_usd',
+    'exchange_rate',
+    'yoy_inflation_estimate_pct',
+    'population_estimate',
+    'breakfast_basket_usd'
+]
+
+plt.figure(figsize=(7,5))
+sns.heatmap(df[important_cols].corr(), annot=True, cmap="coolwarm", fmt=".2f")
+plt.title("Correlation Heatmap")
+plt.show()
+
+# -------------------------------
+# 5. CORRELATION (BEFORE)
+# -------------------------------
+num_df = df[num_cols]
+print("\nCorrelation Matrix (Before):\n", num_df.corr())
+
+# -------------------------------
+# 6. IQR OUTLIER HANDLING (FIXED)
+# -------------------------------
+df_iqr = num_df.copy()
+
+mask = pd.Series(True, index=df_iqr.index)
+
+for col in num_cols:
+    Q1 = df_iqr[col].quantile(0.25)
+    Q3 = df_iqr[col].quantile(0.75)
+    IQR = Q3 - Q1
+
+    lower = Q1 - 1.5 * IQR
+    upper = Q3 + 1.5 * IQR
+
+    mask &= (df_iqr[col] >= lower) & (df_iqr[col] <= upper)
+
+df_iqr = df_iqr[mask]
+
+print("\nCorrelation After IQR:\n", df_iqr.corr())
+
+# -------------------------------
+# 7. Z-SCORE OUTLIER HANDLING
+# -------------------------------
+z_scores = np.abs(zscore(num_df, nan_policy='omit'))
+
+df_z = num_df[(z_scores < 3).all(axis=1)]
+
+print("\nCorrelation After Z-score:\n", df_z.corr())
