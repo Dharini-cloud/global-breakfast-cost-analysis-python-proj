@@ -3,6 +3,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy.stats import zscore
+from scipy import stats
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import r2_score
 
 # -------------------------------
 # 1. LOAD DATA
@@ -129,9 +133,88 @@ print("\nCorrelation After IQR:\n", df_iqr.corr())
 
 # -------------------------------
 # 7. Z-SCORE OUTLIER HANDLING
-# -------------------------------
+# -------------------------------g
 z_scores = np.abs(zscore(num_df, nan_policy='omit'))
 
 df_z = num_df[(z_scores < 3).all(axis=1)]
 
 print("\nCorrelation After Z-score:\n", df_z.corr())
+
+# -------------------------------
+# LOAD CLEAN DATA (use your cleaned df)
+# -------------------------------
+df = pd.read_csv("breakfast basket.csv")
+
+# Basic cleaning (minimal required)
+df.columns = df.columns.str.strip().str.lower().str.replace(" ", "_")
+df = df.dropna().drop_duplicates().reset_index(drop=True)
+
+# -------------------------------
+# OBJECTIVE 4: HYPOTHESIS TESTING
+# -------------------------------
+print("\n===== HYPOTHESIS TESTING =====")
+
+# Normality test (Shapiro)
+sample_data = df['price_usd'].sample(500, random_state=42)
+stat, p = stats.shapiro(sample_data)
+
+print("Shapiro p-value:", p)
+
+if p > 0.05:
+    print("Data is normally distributed")
+else:
+    print("Data is NOT normally distributed")
+
+# T-test (split data based on median)
+median_val = df['price_usd'].median()
+
+group1 = df[df['price_usd'] <= median_val]['breakfast_basket_usd']
+group2 = df[df['price_usd'] > median_val]['breakfast_basket_usd']
+
+t_stat, p_val = stats.ttest_ind(group1, group2)
+
+print("T-test p-value:", p_val)
+
+if p_val < 0.05:
+    print("Reject H0 → Significant difference exists")
+else:
+    print("Fail to reject H0 → No significant difference")
+
+# -------------------------------
+# OBJECTIVE 5: SIMPLE LINEAR REGRESSION
+# -------------------------------
+print("\n===== SIMPLE LINEAR REGRESSION =====")
+
+X = df[['price_usd']]
+y = df['breakfast_basket_usd']
+
+# Train-test split
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Model
+model = LinearRegression()
+model.fit(X_train, y_train)
+
+# Prediction
+y_pred = model.predict(X_test)
+
+# Results
+print("Slope (m):", model.coef_[0])
+print("Intercept (c):", model.intercept_)
+print("R2 Score:", r2_score(y_test, y_pred))
+
+# -------------------------------
+# OBJECTIVE 6: SCENARIO-BASED ANALYSIS
+# -------------------------------
+print("\n===== SCENARIO ANALYSIS =====")
+
+# Cost per unit
+df['cost_per_unit'] = df['breakfast_basket_usd'] / df['quantity']
+
+# Top expensive items
+top_items = df.groupby('item')['breakfast_basket_usd'].mean().sort_values(ascending=False).head(5)
+print("\nTop Expensive Items:\n", top_items)
+
+# Most expensive countries
+top_countries = df.groupby('country')['breakfast_basket_usd'].mean().sort_values(ascending=False).head(5)
+print("\nMost Expensive Countries:\n", top_countries)
