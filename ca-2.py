@@ -45,7 +45,7 @@ df = df.drop(columns=constant_cols)
 num_cols = df.select_dtypes(include=np.number).columns
 
 # -------------------------------
-# 🔍 EDA (NOT OBJECTIVE)
+#  EDA 
 # -------------------------------
 print("\n===== EDA =====")
 print("Shape:", df.shape)
